@@ -45,7 +45,7 @@ def train(model, dataset):
                     epoch, i * len(data), len(loader.dataset),
                     100. * i / len(loader), loss.item()))
 
-    for epoch in range(1, 20 + 1):
+    for epoch in range(1, 20):
         make_epoch(epoch)
 
 
@@ -78,14 +78,23 @@ def compute_hessian(model, dataset):
         output = model(data)
         loss = F.nll_loss(output, target, reduction='sum') / len(dataset)
 
-        print('\rCompute the hessian: [{}]'.format("*" * i + " " * (len(loader) - i)), end='')
+        print'\rCompute the hessian: [{}]'.format("*" * i + " " * (len(loader) - i))
         hessian(loss, model.parameters(), out=h)
+    print(model.parameters())
     print('\rCompute the hessian: [{}]'.format("*" * len(loader)))
-
+    print(h.shape)
     print('Diagonalize the hessian...    ')
-    eigenvalues, _ = torch.symeig(h)
+    eigenvalues, eigenvec = torch.symeig(h)
     print("The first eigenvalues are {}".format(eigenvalues[:20]))
     print("The last eigenvalues are {}".format(eigenvalues[-20:]))
+    top = 20
+    dom = eigenvec[:,-top:]
+    alpha=torch.rand(top, device=torch.device("cuda"))
+    vec=(alpha*dom).sum(1)
+    vec=vec/torch.sqrt((vec*vec).sum())
+    # inverse of hessian
+    inv_h=torch.pinverse(h)
+    return (h, inv_h, vec)
 
 
 def main():
@@ -105,7 +114,24 @@ def main():
 
     train(model, trainset)
     test(model, testset)
-    compute_hessian(model, trainset)
-
-
+    # top_vec is the vector obtained by drawing a vector from top eigen subspace of Hessian
+    #Hess, top_vec = compute_hessian(model, trainset)
+    h = compute_hessian(model, trainset)
+    inv_h = h[1]
+    top_vec = h[2]
+    # Calculating the gradient in flatten form
+    g=torch.rand(0).cuda().float()
+    for i in model.parameters():
+        for k, l in enumerate(i):
+            if l.dim()==0:
+                l=l.view(1)
+                g=torch.cat((g.float(),torch.flatten(l)))
+            else:
+                g=torch.cat((g.float(),torch.flatten(l)))
+    
+    # Checking if invariant
+    w_t = g-0.001*top_vec
+    #coeff 
+    coeff =  torch.mv(inv_h, w_t)
+    print(coeff)
 main()
