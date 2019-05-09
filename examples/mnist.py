@@ -98,7 +98,7 @@ def analyse_hessian(model, inv_h, top_vec):
     # Since inv_h is a 570x20 dim we need to append 0's in all last columns
     inv_h = torch.cat((inv_h, torch.cuda.FloatTensor(inv_h.shape[0], inv_h.shape[0]-inv_h.shape[1]).fill_(0)),1)
     #coeff 
-    coeff =  torch.mv(inv_h, w_t)
+    coeff =  torch.mv(inv_h.transpose(0,1), w_t)
     # printing indices which satisfy a condition of staying within a range
     a=torch.zeros (coeff.shape[0]).long().cuda()
     b=torch.arange(0, coeff.shape[0]).cuda()
