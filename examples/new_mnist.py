@@ -1,3 +1,6 @@
+# This is new mnist
+# In this after taking a vector from top eigen subspace and transform it
+# we now represent it using entire eigen subspace and see it if is only in top subspace
 # pylint: disable = C, R, E1101, E1123
 import torch
 import torch.nn as nn
@@ -42,7 +45,6 @@ class Net(nn.Module):
         x = self.fc1(x)
         return F.log_softmax(x, dim=1)
 
-
 def train(model, dataset):
     loader = torch.utils.data.DataLoader(dataset, batch_size=64, shuffle=True)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
@@ -66,7 +68,10 @@ def train(model, dataset):
         make_epoch(epoch)
         if epoch % 10 == 0:
             h = compute_hessian(model, dataset)
-            sum, c = analyse_hessian(model, h[1], h[2])
+            # h = (hessian, dominant eigen vec space, random vec in eigen subspace, entire eigen values)
+            # analyse_hessian (model, top eigen space, top eigen vec)
+            # sum, c = analyse_hessian(model, h[3], h[2])
+            sum, c = analyse_hessian(model, h[0], h[2])
             sig.append(sum)
             if np.size(coeff) == 0:
                 coeff = c.detach().cpu().numpy()
@@ -92,7 +97,6 @@ def analyse_hessian(model, inv_h, top_vec):
                 g=torch.cat((g.float(),torch.flatten(l)))
             else:
                 g=torch.cat((g.float(),torch.flatten(l)))
-    
     # Checking if invariant
     w_t = g- p.lr*top_vec
     # Since inv_h is a 570x20 dim we need to append 0's in all last columns
@@ -107,10 +111,8 @@ def analyse_hessian(model, inv_h, top_vec):
     print("Zero directions ", torch.sum(c == 0))
     return torch.sum(c == 0),coeff
 
-
 def test(model, dataset):
     loader = torch.utils.data.DataLoader(dataset, batch_size=2000)
-
     model.eval()
     loss = 0
     correct = 0
@@ -124,16 +126,13 @@ def test(model, dataset):
 
     print("accuracy = {}".format(correct*100.0 / len(loader.dataset)))
 
-
 def compute_hessian(model, dataset):
     loader = torch.utils.data.DataLoader(dataset, batch_size=500)
-
     n = sum(p.numel() for p in model.parameters())
     h = torch.zeros(n, n, device=device,requires_grad=False)
 
     for i, (data, target) in enumerate(loader):
         data, target = data.to(device), target.to(device)
-
         output = model(data)
         loss = F.nll_loss(output, target, reduction='sum') / len(dataset)
 
@@ -150,24 +149,20 @@ def compute_hessian(model, dataset):
     alpha=torch.rand(top, device=torch.device(p.device))
     vec=(alpha*dom).sum(1)
     vec=vec/torch.sqrt((vec*vec).sum())
-    return (h, dom, vec)
-
+    return (h, dom, vec, eigenvec)
 
 def main():
     torch.backends.cudnn.benchmark = True
-
     transform = torchvision.transforms.Compose([
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize((0.1307,), (0.3081,))
     ])
     trainset = torchvision.datasets.MNIST('../data', train=True, download=True, transform=transform)
     testset = torchvision.datasets.MNIST('../data', train=False, transform=transform)
-
     # make the example faster
     trainset = torch.utils.data.Subset(trainset, range(4000))
-
     model = Net().to(device)
-
     train(model, trainset)
     test(model, testset)
 main()
+
